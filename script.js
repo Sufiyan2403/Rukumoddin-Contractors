@@ -73,7 +73,6 @@ document.addEventListener('DOMContentLoaded', () => {
     ...document.querySelectorAll('.why-card'),
     ...document.querySelectorAll('.contact-info-card'),
     document.querySelector('.about-grid'),
-    document.querySelector('.contact-form'),
   ].filter(Boolean);
   revealEls.forEach((el, i) => {
     el.classList.add('reveal');
@@ -82,36 +81,129 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// ===== PLAY BUTTON (video placeholder interaction) =====
-document.querySelectorAll('.play-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const label = btn.closest('.video-placeholder').querySelector('.video-label');
-    label.textContent = '📹 Add your video src to this placeholder';
-    label.style.background = 'rgba(249,115,22,0.8)';
-    btn.style.display = 'none';
+// ===== PROJECT VIDEOS =====
+function keepProjectVideoMuted(video) {
+  video.muted = true;
+  video.defaultMuted = true;
+  video.volume = 0;
+  video.removeAttribute('controls');
+  video.addEventListener('volumechange', () => {
+    if (!video.muted || video.volume !== 0) {
+      video.muted = true;
+      video.volume = 0;
+    }
   });
-});
+}
+document.querySelectorAll('.project-video').forEach(keepProjectVideoMuted);
 
-// ===== CONTACT FORM =====
-const form = document.getElementById('contactForm');
-const successMsg = document.getElementById('formSuccess');
-form.addEventListener('submit', e => {
-  e.preventDefault();
-  const name = document.getElementById('name').value.trim();
-  const phone = document.getElementById('phone').value.trim();
-  const message = document.getElementById('message').value.trim();
-  if (!name || !phone || !message) {
-    alert('Please fill in all required fields (Name, Phone, Message).');
-    return;
+// ===== PROJECT MEDIA SLIDERS =====
+document.querySelectorAll('.project-card').forEach(card => {
+  const media = card.querySelector('.project-media');
+  let activeMedia = media?.querySelector('.project-thumb, .project-video');
+  const gallery = card.querySelector('.project-gallery');
+  if (!media || !activeMedia || !gallery) return;
+
+  const originalGalleryImages = [...gallery.querySelectorAll('img')];
+  if (originalGalleryImages.length === 0) return;
+
+  originalGalleryImages.forEach(image => {
+    image.setAttribute('tabindex', '0');
+    image.setAttribute('role', 'button');
+  });
+
+  const originalIsVideo = activeMedia.tagName.toLowerCase() === 'video';
+  const originalSlide = {
+    type: originalIsVideo ? 'video' : 'image',
+    src: activeMedia.getAttribute('src'),
+    poster: activeMedia.getAttribute('poster') || activeMedia.getAttribute('src'),
+    alt: activeMedia.getAttribute('aria-label') || activeMedia.getAttribute('alt') || 'Project media',
+    label: originalIsVideo ? 'Muted Site Video' : 'Photo Gallery',
+  };
+
+  const firstThumb = document.createElement('img');
+  firstThumb.src = originalSlide.poster || originalSlide.src;
+  firstThumb.alt = originalSlide.alt;
+  firstThumb.setAttribute('tabindex', '0');
+  firstThumb.setAttribute('role', 'button');
+  gallery.prepend(firstThumb);
+
+  const thumbs = [...gallery.querySelectorAll('img')];
+  const slides = [
+    originalSlide,
+    ...originalGalleryImages.map(image => ({
+      type: 'image',
+      src: image.getAttribute('src'),
+      alt: image.getAttribute('alt') || 'Project photo',
+      label: 'Photo Gallery',
+    })),
+  ];
+  let current = 0;
+
+  const prevButton = document.createElement('button');
+  prevButton.type = 'button';
+  prevButton.className = 'slider-btn slider-prev';
+  prevButton.setAttribute('aria-label', 'Previous project photo');
+  prevButton.textContent = '<';
+
+  const nextButton = document.createElement('button');
+  nextButton.type = 'button';
+  nextButton.className = 'slider-btn slider-next';
+  nextButton.setAttribute('aria-label', 'Next project photo');
+  nextButton.textContent = '>';
+
+  media.append(prevButton, nextButton);
+
+  function createImage(slide) {
+    const image = document.createElement('img');
+    image.className = 'project-thumb';
+    image.src = slide.src;
+    image.alt = slide.alt;
+    return image;
   }
-  const btn = document.getElementById('submitBtn');
-  btn.innerHTML = '<span>Sending...</span>';
-  btn.disabled = true;
-  setTimeout(() => {
-    form.reset();
-    btn.innerHTML = '<span>Send Message</span><span class="btn-arrow">→</span>';
-    btn.disabled = false;
-    successMsg.style.display = 'block';
-    setTimeout(() => successMsg.style.display = 'none', 5000);
-  }, 1500);
+
+  function createVideo(slide) {
+    const video = document.createElement('video');
+    video.className = 'project-video';
+    video.src = slide.src;
+    if (slide.poster) video.poster = slide.poster;
+    video.autoplay = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.preload = 'metadata';
+    video.setAttribute('aria-label', slide.alt);
+    keepProjectVideoMuted(video);
+    return video;
+  }
+
+  function showSlide(index, shouldScroll = true) {
+    current = (index + slides.length) % slides.length;
+    const slide = slides[current];
+    const nextMedia = slide.type === 'video' ? createVideo(slide) : createImage(slide);
+    nextMedia.classList.add('is-changing');
+    activeMedia.replaceWith(nextMedia);
+    activeMedia = nextMedia;
+    const label = media.querySelector('.media-label');
+    if (label) label.textContent = slide.label;
+    thumbs.forEach((thumb, thumbIndex) => {
+      thumb.classList.toggle('active-thumb', thumbIndex === current);
+    });
+    if (shouldScroll) {
+      thumbs[current].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+    window.setTimeout(() => activeMedia.classList.remove('is-changing'), 160);
+  }
+
+  thumbs.forEach((thumb, index) => {
+    thumb.addEventListener('click', () => showSlide(index));
+    thumb.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        showSlide(index);
+      }
+    });
+  });
+  prevButton.addEventListener('click', () => showSlide(current - 1));
+  nextButton.addEventListener('click', () => showSlide(current + 1));
+
+  showSlide(0, false);
 });
